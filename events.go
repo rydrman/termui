@@ -236,16 +236,31 @@ func (es *EvtStream) Loop() {
 		case "/sig/stoploop":
 			return
 		}
-		go func(a Event) {
-			es.RLock()
-			defer es.RUnlock()
-			if pattern := es.match(a.Path); pattern != "" {
-				es.Handlers[pattern](a)
-			}
-		}(e)
-		if es.hook != nil {
-			es.hook(e)
+		es.handleEvent(e)
+	}
+}
+
+func (es *EvtStream) HandleEvents() {
+	for true {
+		select {
+		case e := <-es.stream:
+			es.handleEvent(e)
+		default:
+			return
 		}
+	}
+}
+
+func (es *EvtStream) handleEvent(e Event) {
+	go func(a Event) {
+		es.RLock()
+		defer es.RUnlock()
+		if pattern := es.match(a.Path); pattern != "" {
+			es.Handlers[pattern](a)
+		}
+	}(e)
+	if es.hook != nil {
+		es.hook(e)
 	}
 }
 
@@ -268,6 +283,10 @@ func Handle(path string, handler func(Event)) {
 
 func Loop() {
 	DefaultEvtStream.Loop()
+}
+
+func HandleEvents() {
+	DefaultEvtStream.HandleEvents()
 }
 
 func StopLoop() {
@@ -302,7 +321,7 @@ func NewTimerCh(du time.Duration) chan Event {
 	return t
 }
 
-var DefualtHandler = func(e Event) {
+var DefaultHandler = func(e Event) {
 }
 
 var usrEvtCh = make(chan Event)
