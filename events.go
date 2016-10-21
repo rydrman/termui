@@ -154,7 +154,7 @@ type EvtStream struct {
 func NewEvtStream() *EvtStream {
 	return &EvtStream{
 		srcMap:      make(map[string]chan Event),
-		stream:      make(chan Event),
+		stream:      make(chan Event, 10),
 		Handlers:    make(map[string]func(Event)),
 		sigStopLoop: make(chan Event),
 	}
@@ -240,20 +240,21 @@ func (es *EvtStream) Loop() {
 	}
 }
 
+func (es *EvtStream) HandleOneEvent() {
+	e := <-es.stream
+	es.handleEvent(e)
+}
+
 func (es *EvtStream) HandleEvents() {
-	for true {
-		select {
-		case e := <-es.stream:
-			es.handleEvent(e)
-		default:
-			return
-		}
+	for len(es.stream) > 0 {
+		e := <-es.stream
+		es.handleEvent(e)
 	}
 }
 
 func (es *EvtStream) handleEvent(e Event) {
+	es.RLock()
 	go func(a Event) {
-		es.RLock()
 		defer es.RUnlock()
 		if pattern := es.match(a.Path); pattern != "" {
 			es.Handlers[pattern](a)
